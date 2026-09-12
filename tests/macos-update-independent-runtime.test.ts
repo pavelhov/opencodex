@@ -6,6 +6,8 @@ import { createServer } from "node:net";
 import { acquireProxyLifecycleAuthority } from "../src/server/proxy-lifecycle-authority";
 import { assertMacosUpdateAllowsRuntimeStart, MacosUpdateTransactionStore } from "../src/server/macos-update-transaction";
 import { assertMacosUpdateAllowsServiceStart, type ServiceDiagnostic, type ServiceInstallState } from "../src/service";
+// These macOS fixtures require POSIX permissions, directory fsync, and bundle paths.
+// Keep Linux coverage; Windows cannot represent the durability/provenance contract.
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root,{recursive:true,force:true}); });
 async function fixture() {
@@ -20,7 +22,7 @@ async function fixture() {
   store.transition(authority,"independent","prepared"); store.transition(authority,"independent","armed"); authority.releaseAll();
   return {root,config,codex,home,store,bundlePath};
 }
-test("physical start uses actual paths and refuses bundle, mixed, missing provenance", async () => {
+test.skipIf(process.platform === "win32")("physical start uses actual paths and refuses bundle, mixed, missing provenance", async () => {
   const f = await fixture();
   const external = join(f.root,"external.ts"); writeFileSync(external,"");
   const bundled = join(f.bundlePath,"Contents","Resources","runtime.ts"); mkdirSync(join(f.bundlePath,"Contents","Resources"),{recursive:true}); writeFileSync(bundled,"");
@@ -29,7 +31,7 @@ test("physical start uses actual paths and refuses bundle, mixed, missing proven
   expect(()=>assertMacosUpdateAllowsRuntimeStart(f.store,{modulePath:external,executablePath:bundled})).toThrow();
   expect(()=>assertMacosUpdateAllowsRuntimeStart(f.store,{modulePath:join(f.root,"missing"),executablePath:external})).toThrow();
 });
-test("registered service target is checked independently of the caller", async () => {
+test.skipIf(process.platform === "win32")("registered service target is checked independently of the caller", async () => {
   const f = await fixture();
   const diagnostic: ServiceDiagnostic = {supported:true,registrationState:"present",supervisorState:"inactive",installed:true,enabled:true,running:false,viable:false,startable:true,stale:false,conflict:false,backend:"launchd",summary:""};
   const state: ServiceInstallState = {version:3,codexHome:f.codex,codexCommanderHome:f.config,bunPath:"/outside/bun",cliPath:"/outside/ccx",backend:"scheduler"};
@@ -38,7 +40,7 @@ test("registered service target is checked independently of the caller", async (
   expect(()=>check({...state,bunPath:`${f.bundlePath}/Contents/Resources/bun`,cliPath:`${f.bundlePath}/Contents/Resources/cli`})).toThrow();
   expect(()=>check({...state,bunPath:`${f.bundlePath}/Contents/Resources/bun`})).toThrow();
 });
-test("independent autonomous service child serves during armed update without rewriting routing", async () => {
+test.skipIf(process.platform === "win32")("independent autonomous service child serves during armed update without rewriting routing", async () => {
   const f = await fixture();
   const port = await new Promise<number>((resolve,reject)=>{const server=createServer(); server.once("error",reject); server.listen(0,"127.0.0.1",()=>{const value=server.address();const port=typeof value === "object" && value ? value.port : 0;server.close(error=>error?reject(error):resolve(port));});});
   const settings = JSON.stringify({port,hostname:"127.0.0.1",codexAutoStart:true,multiAgentGuidanceEnabled:true,clientIntegrations:{codex:true},defaultProvider:"mock",providers:{mock:{adapter:"openai-chat",baseUrl:"http://127.0.0.1:9/v1",allowPrivateNetwork:true,models:["test"],defaultModel:"test"}}});
@@ -87,7 +89,7 @@ test("independent service command starts without routing preparation or converge
   expect(starts).toBe(1); expect(writes).toBe(0);
 });
 
-test("independent Ensure preserves routing and cannot start a registered bundled service", async () => {
+test.skipIf(process.platform === "win32")("independent Ensure preserves routing and cannot start a registered bundled service", async () => {
   const { ensureProxyLifecycleUnderLock } = await import("../src/cli/proxy-lifecycle");
   const { getDefaultConfig } = await import("../src/config");
   const f = await fixture(); const previous = process.env.CODEXCOMMANDER_HOME;
