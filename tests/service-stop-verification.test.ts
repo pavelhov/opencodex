@@ -129,7 +129,8 @@ describe("service stop verification (#764)", () => {
 });
 
 
-describe("macOS update supervisor provenance", () => {
+// The injected launchd evidence deliberately uses macOS bundle and realpath syntax.
+describe.skipIf(process.platform === "win32")("macOS update supervisor provenance", () => {
   const diagnostic: ServiceDiagnostic = {supported:true,registrationState:"present",supervisorState:"active",installed:true,enabled:true,running:true,viable:true,startable:true,stale:false,conflict:false,backend:"launchd",summary:""};
   const state: ServiceInstallState = {version:3,codexHome:"/isolated/codex",codexCommanderHome:"/isolated/ccx",bunPath:"/Applications/Test.app/Contents/Resources/runtime/bun",cliPath:"/Applications/Test.app/Contents/Resources/runtime/src/cli/index.ts",backend:"scheduler"};
   const inspect = (selected: ServiceInstallState, matches = true) => inspectMacosUpdateServiceProvenance("/Applications/Test.app",{diagnose:()=>diagnostic,evidence:()=>[{kind:"valid",path:"/isolated/state",state:selected}],realpath:((path: string)=>path) as typeof import("node:fs").realpathSync,registrationMatches:()=>matches});

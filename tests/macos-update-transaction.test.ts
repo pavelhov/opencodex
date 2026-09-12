@@ -8,6 +8,8 @@ import { handleMacosUpdateAdmission, inspectMacosRuntimeBundleProvenance } from 
 import { proxyLifecycleLockLeaseHeaders } from "../src/server/proxy-lifecycle-protocol";
 import { getDefaultConfig } from "../src/config";
 import { acquireTemporaryDrain, getActiveTurnCount, tryAdmitTurn, resetLifecycleDrainStateForTests } from "../src/server/lifecycle";
+// These macOS fixtures require POSIX permissions, directory fsync, and bundle paths.
+// Keep Linux coverage; Windows cannot represent the durability/provenance contract.
 const roots: string[] = [];
 afterEach(() => {
   resetLifecycleDrainStateForTests();
@@ -41,7 +43,7 @@ async function fixture() {
     store, authority, snapshot, request
   };
 }
-describe("macOS durable update exclusion", () => {
+describe.skipIf(process.platform === "win32")("macOS durable update exclusion", () => {
   test("persists before stopping and retains original snapshot across retries and helper exit", async () => {
     const f = await fixture();
     let stopped = 0;
@@ -114,7 +116,7 @@ describe("macOS durable update exclusion", () => {
     expect(() => f.store.read()).toThrow();
   });
 });
-test("admission seal cannot interrupt work without durable Update Anyway authorization", async () => {
+test.skipIf(process.platform === "win32")("admission seal cannot interrupt work without durable Update Anyway authorization", async () => {
   const f = await fixture();
   f.store.begin(f.authority, f.request, {
     ...f.snapshot, process: {
@@ -149,7 +151,7 @@ test("admission seal cannot interrupt work without durable Update Anyway authori
   expect(getActiveTurnCount()).toBe(0);
   expect(tryAdmitTurn()).toBeNull();
 });
-test("recovery scope is explicit and retry never forgets prior installer arm", async () => {
+test.skipIf(process.platform === "win32")("recovery scope is explicit and retry never forgets prior installer arm", async () => {
   const f = await fixture();
   f.store.begin(f.authority, f.request, f.snapshot);
   f.store.transition(f.authority, f.request.transactionId, "prepared");
@@ -164,7 +166,7 @@ test("recovery scope is explicit and retry never forgets prior installer arm", a
   expect(f.store.read()?.latestIntent?.running).toBeNull();
   expect(f.store.read()?.original.running).toBe(true);
 });
-test("shared mutations remain excluded after helper exit", async () => {
+test.skipIf(process.platform === "win32")("shared mutations remain excluded after helper exit", async () => {
   const f = await fixture();
   f.store.begin(f.authority, f.request, f.snapshot);
   f.authority.releaseAll();
@@ -172,7 +174,7 @@ test("shared mutations remain excluded after helper exit", async () => {
   expect(f.store.read()?.phase).toBe("preparing");
 });
 
-test("seal success followed by failed stop preserves durable recovery and closed admission", async () => {
+test.skipIf(process.platform === "win32")("seal success followed by failed stop preserves durable recovery and closed admission", async () => {
   const f = await fixture();
   const result = await prepareMacosUpdate(f.store, f.authority, f.request, {
     capture: async () => ({
@@ -205,7 +207,7 @@ test("seal success followed by failed stop preserves durable recovery and closed
   expect(() => assertMacosUpdateAllowsMutation(f.store)).toThrow();
 });
 
-test("a runtime with only one executable dependency inside the bundle is never independent", async () => {
+test.skipIf(process.platform === "win32")("a runtime with only one executable dependency inside the bundle is never independent", async () => {
   await fixture();
   const root = roots.at(-1)!;
   const resources = join(root, "Test.app", "Contents", "Resources");
@@ -218,7 +220,7 @@ test("a runtime with only one executable dependency inside the bundle is never i
   expect(inspectMacosRuntimeBundleProvenance(external, external).kind).toBe("independent");
 });
 
-test("pre-stop supersession is durable and does not mistake partial stop writes for newer intent",async()=>{
+test.skipIf(process.platform === "win32")("pre-stop supersession is durable and does not mistake partial stop writes for newer intent",async()=>{
   for(const changed of [false,true]) for(const retryEdit of [false,true]) {
     const f=await fixture();let fingerprint=changed?"user-edit":"original";let attempts=0;
     const io={
@@ -241,7 +243,7 @@ test("pre-stop supersession is durable and does not mistake partial stop writes 
   }
 });
 
-test("schema v1 accepts legacy records and strictly validates optional preparation and cancellation markers",async()=>{
+test.skipIf(process.platform === "win32")("schema v1 accepts legacy records and strictly validates optional preparation and cancellation markers",async()=>{
   const f=await fixture();
   const legacy=f.store.begin(f.authority,f.request,f.snapshot);
   expect(f.store.read()).toEqual(legacy);
@@ -256,7 +258,7 @@ test("schema v1 accepts legacy records and strictly validates optional preparati
   f.authority.releaseAll();
 });
 
-test("a crash without a post-stop baseline conservatively supersedes restoration on retry",async()=>{
+test.skipIf(process.platform === "win32")("a crash without a post-stop baseline conservatively supersedes restoration on retry",async()=>{
   const f=await fixture();
   f.store.begin(f.authority,f.request,{...f.snapshot,intentFingerprint:"original"});
   f.store.recordPreparationIntent(f.authority,f.request.transactionId,"original");
